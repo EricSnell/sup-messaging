@@ -259,9 +259,10 @@ describe('User endpoints', function() {
                     .send(user)
                     .then(function(res) {
                         // Check that an empty object was returned
-                        res.should.have.status(200);
+                        res.should.have.status(201);
                         res.type.should.equal('application/json');
                         res.charset.should.equal('utf-8');
+                        res.should.have.header('location');
                         res.body.should.be.an('object');
                         res.body.should.be.empty;
 

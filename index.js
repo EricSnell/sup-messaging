@@ -43,10 +43,6 @@ var strategy = new BasicStrategy(function(username, password, callback) {
                 });
             }
             return callback(null, user);
-            // user = { _id: 578548ed84a622732d6fd391,
-                        // username: 'ben',
-                        // password: '$2a$10$whSgp5efJLjXZPbtf674g.SJCkUVYmGSRejYLlL6IvMSwu3NbcRzq',
-                        // __v: 0 }
         });
     });
 });
@@ -77,7 +73,7 @@ app.get('/hidden', passport.authenticate('basic', {session: false}), function(re
 // TODO - NEED TO CHANGE OUTPUTS ON THESE GET REQUESTS TO TAKE OUT PASSWORD, OR ALLOW THEM TO DO A GET REQUEST ON THEMSELVES AND GET EVERYTHING, BUT NOT ON OTHERS.
 
 /*----- GET request for array of users -----*/
-app.get('/users', function(request, response) {
+app.get('/users', passport.authenticate('basic', {session: false}), function(request, response) {
     var userNames = [];
 
     User.find(function(error, users) {
@@ -102,12 +98,7 @@ app.get('/users', function(request, response) {
 
 
 /*----- GET request for specific user -----*/
-app.get('/users/:userID', jsonParser, function(request, response) {
-        var emptyUser = {
-            _id: '',
-            username: ''
-        };        
-        
+app.get('/users/:userID', passport.authenticate('basic', {session: false}), function(request, response) {
         User.find({
             _id: request.params.userID
         }, function(error, user) {
@@ -118,174 +109,142 @@ app.get('/users/:userID', jsonParser, function(request, response) {
                     message: "User not found"
                 });
             }
-            emptyUser._id = user[0]._id;
-            emptyUser.username = user[0].username;
+            var returnUser = {
+                _id: user[0]._id,
+                username: user[0].username
+            }; 
+
             // returns OK status and user that was queried in response
-            response.json(emptyUser);
+            response.json(returnUser);
         });
 });
 
 
 /*----- POST request for a user -----*/
 app.post('/users', jsonParser, function(request, response) {
-    // sets username variable
-    var username = request.body.username;
-    // sets password variable
-    var password = request.body.password;
-    
     // Checks that there is a request body
     if (!request.body || request.body === []) {
         return response.status(400).json({
             message: 'No request body'
         });
     }
-    
-    // if username string is empty or undefined, return 422 error
-    if (!('username' in request.body)) {
-        return response.status(422).json({
-            message: 'Missing field: username'
-        });
-    }
-    // if username is not a string then return incorrect type error
-    if (typeof username !== 'string') {
-        return response.status(422).json({
-            message: 'Incorrect field type: username'
-        });
-    }
-    
-    // removes whitespace from either side of username string
-    username = username.trim();
-    
-    // checks that username is not an empty string
-    if (username === '') {
-        return response.status(422).json({
-            message: 'Incorrect field length: username'
-        });
-    }
-    
-    // checks that the password is a string
-    if (typeof password !== 'string') {
-        return response.status(422).json({
-            message: 'Incorrect field type: password'
+    addNewUser(request, response);
+});
+
+/*----- PUT request to edit a username or add user if ID is open -----*/
+app.put('/users/:userID', passport.authenticate('basic', {session: false}), function(request, response) {
+    // Checks that there is a request body
+    if (!request.body || request.body === []) {
+        return response.status(400).json({
+            message: 'No request body'
         });
     }
 
-    // removes whitespace from either side of the password string
-    password = password.trim();
-    
-    // checks that password is not an empty string
-    if (password === '') {
-        return response.status(422).json({
-            message: 'Incorrect field length: password'
-        });
-    }
-
-    // generates salt for hash (the '10' indicates how many rounds of the salting algorithm should be used -- the higher the number, the more computationally difficult it is to compare two passwords. 10-12 provides a nice balance between taking long enough so brute-force cracking is difficult, and being quick enough that your app is responsive to your users). 
-    bcrypt.genSalt(10, function(error, salt) {
+    User.find({_id: request.params.userID}, function(error, user) {
         if (error) {
-            return response.status(500).json({
-                message: 'Internal server error'
-            });
+            return response.sendStatus(500);
         }
-        
-        // generates a salted SHA-1 hash
-        bcrypt.hash(password, salt, function(error, hash) {
-            if (error) {
-                return response.status(500).json({
-                    message: 'Internal server error'
+        // if no user document at userID, calls addNewUser() and creates one
+        if (!user) {
+            addNewUser(request, response);
+        } 
+        // if there is a user document at userID, authenticates that the user is authorized to make changes and edits user document if so
+        else {
+            // After authentication, checks that the requesting user's ID matches the supplied userID
+            if (request.params.userID !== request.user._id.toString()) {
+                return response.status(401).json({
+                     message: 'Unauthorized'
                 });
             }
             
-            // creates new user from the constructor
-            var user = new User({
-                username: username,
-                password: hash
-            });
+            // variables
+            var updatedUser = {
+                                _id: request.params.userID,
+                                username: user.username,
+                                password: user.password
+                            };
+            var username = request.body.username;
+            var password = request.body.password;
             
-            // saves new user to database
-            user.save(function(error) {
+            // checks if they provided a username to update
+            if ('username' in request.body) {
+                // checks if supplied username is valid
+                if (typeof username !== 'string') {
+                    return response.status(422).json({
+                        message: 'Incorrect field type: username'
+                    });
+                }
+                username = username.trim();
+                if (username === '') {
+                    return response.status(422).json({
+                        message: 'Incorrect field length: username'
+                    });
+                }
+                // update username
+                updatedUser.username = username;
+            }
+            
+            // checks if they provided a password to update
+            if ('password' in request.body) {
+            // checks if supplied password is valid
+                if (typeof password !== 'string') {
+                    return response.status(422).json({
+                        message: 'Incorrect field type: password'
+                    });
+                }
+                
+                password = password.trim();
+
+                if (password === '') {
+                    return response.status(422).json({
+                        message: 'Incorrect field length: password'
+                    });
+                }
+                // create new hash password if supplied password is valid
+                bcrypt.genSalt(10, function(error, salt) {
+                    if (error) {
+                        return response.status(500).json({
+                            message: 'Internal server error'
+                        });
+                    }
+
+                    bcrypt.hash(password, salt, function(error, hash) {
+                        if (error) {
+                            return response.status(500).json({
+                                message: 'Internal server error'
+                            });
+                        }
+                        
+                    });    
+                });
+                updatedUser.password = password;
+            }
+            // update user document
+            User.update(user, updatedUser, function(error) {
                if (error) {
                    return response.status(500).json({
                        message: 'Internal server error'
                    });
                } 
-               response.status(201).header('Location', '/users/' + user._id).json({});
+               response.json({});
             });
-        });
+        }
     });
 });
 
-
-/*----- PUT request to edit a username or add user if ID is open -----*/
-app.put('/users/:userID', passport.authenticate('basic', {session: false}), function(request, response) {
-    console.log(request);
-    // After authentication, checks that the requesting user's ID matches the supplied userID
-    if (request.params.userID != request.user._id) {
-        return response.status(401).json({
-             message: 'Unauthorized'
-        });
-    }
-    // check that username provided is not an empty field
-    if (!request.body.username) {
-        return response.status(422).json({
-            message: 'Missing field: username'
-        });
-    }
-    // check that username provided is a string
-    if (typeof request.body.username !== 'string') {
-        return response.status(422).json({
-            message: 'Incorrect field type: username'
-        });
-    }
-    // find requested user and update username in user document
-    User.findOneAndUpdate({
-        _id: request.params.userID
-    }, {
-        username: request.body.username
-    }, function(error, user) {
-        // if there is not user document with specified user ID
-        if (!user) {
-            // creates a new user at specified user ID with provided username
-            var newUser = {
-                _id: request.params.userID,
-                username: request.body.username
-            };
-            User.create(newUser, function(error, user) {
-                if (error) {
-                    return response.sendStatus(500);
-                }
-            });
-        }
-        
-        if(error) {
-            return response.json({
-                message: 'Something happened',
-                error: error
-            });
-        }
-        
-        response.json({
-            message: 'Success!',
-            user: user
-        });
-    });
-});
-// TODO - IF TIME ALLOWS, ADD PUT REQUEST FOR CHANGING PASSWORD
 
 
 /*----- DELETE request to remove user by user ID -----*/
 app.delete('/users/:userID', passport.authenticate('basic', {session: false}), function(request, response) {
     // After authentication, checks that the requesting user's id matches the supplied userID
-      if (request.params.userID != request.user._id) {
+      if (request.params.userID !== request.user._id.toString()) {
         return response.status(401).json({
              message: 'Unauthorized'
         });
     }
     
     // find user document by user ID and remove document
-    User.findByIdAndRemove({
-        _id: request.params.userID
-    }, function(error, user) {
+    User.findByIdAndRemove({_id: request.params.userID}, function(error, user) {
         // if user doc does not exist, return 404 error
         if (!user) {
             return response.status(404).json({
@@ -301,10 +260,11 @@ app.delete('/users/:userID', passport.authenticate('basic', {session: false}), f
 
 /*--------------------------- MESSAGE ENDPOINTS ----------------------------*/
 
+// TODO: FIX THIS AUTHENTICATION AND CHECK RETURN
 /*----- GET request for messages array -----*/
 app.get('/messages', passport.authenticate('basic', {session: false}), function(request, response) {
     // After authentication, checks that the user requesting user's id matches either the 'to' field or the 'from' field
-    if ((request.query.to !== request.user._id) || (request.query.from !== request.user._id)) {
+    if ((request.query.to !== request.user._id.toString()) && (request.query.from !== request.user._id.toString())) {
         return response.status(401).json({
              message: 'Unauthorized'
         });
@@ -321,9 +281,21 @@ app.get('/messages', passport.authenticate('basic', {session: false}), function(
 
 /*----- GET request for a single message ------*/
 app.get('/messages/:messageId', passport.authenticate('basic', {session: false}), function(request, response) {
-    Message.findOne({_id: request.params.messageId}).populate('from to').exec(function(error, message) {
+    Message.findOne({_id: request.params.messageId}).populate('to from').exec(function(error, message) {
+        var returnMessage = {
+            _id: message.id,
+            from: {
+                    _id: message.from._id,
+                    username: message.from.username
+            },
+            to: {
+                    _id: message.to._id,
+                    username: message.to.username
+            },
+            text: message.text
+        }
         // checks that the user requesting user's id matches either the 'to' field or the 'from' field
-        if ((message.to._id !== request.user._id) || (message.from._id !== request.user._id)) {
+        if (message.to._id.toString() !== request.user._id.toString() && message.from._id.toString() !== request.user._id.toString()) {
             return response.status(401).json({
                 message: 'Unauthorized'
             });
@@ -332,7 +304,7 @@ app.get('/messages/:messageId', passport.authenticate('basic', {session: false})
             return response.status(404).json({message: 'Message not found'});
         }
         // return message that was fetched
-        response.json(message);
+        response.json(returnMessage);
     });
 });
 
@@ -340,7 +312,7 @@ app.get('/messages/:messageId', passport.authenticate('basic', {session: false})
 /*----- POST request for messages -----*/
 app.post('/messages', passport.authenticate('basic', {session: false}), function(request, response) {
     // After authentication, checks that the 'from' field matches the requesting user's id
-    if (request.query.from !== request.user._id) {
+    if (request.body.from !== request.user._id.toString()) {
         return response.status(401).json({
              message: 'Unauthorized'
         });
@@ -405,6 +377,81 @@ app.post('/messages', passport.authenticate('basic', {session: false}), function
         }
     });
 });
+
+
+
+/*------------------------- ADD NEW USER FUNCTION -----------------------*/
+
+function addNewUser(request, response) {
+    // sets username variable
+    var username = request.body.username;
+    // sets password variable
+    var password = request.body.password;
+    // if username string is empty or undefined, return 422 error
+    if (!('username' in request.body)) {
+        return response.status(422).json({
+            message: 'Missing field: username'
+        });
+    }
+    // if username is not a string then return incorrect type error
+    if (typeof username !== 'string') {
+        return response.status(422).json({
+            message: 'Incorrect field type: username'
+        });
+    }
+    // removes whitespace from either side of username string
+    username = username.trim();
+    // checks that username is not an empty string
+    if (username === '') {
+        return response.status(422).json({
+            message: 'Incorrect field length: username'
+        });
+    }
+    // checks that the password is a string
+    if (typeof password !== 'string') {
+        return response.status(422).json({
+            message: 'Incorrect field type: password'
+        });
+    }
+    // removes whitespace from either side of the password string
+    password = password.trim();
+    // checks that password is not an empty string
+    if (password === '') {
+        return response.status(422).json({
+            message: 'Incorrect field length: password'
+        });
+    }
+    // generates salt for hash (the '10' indicates how many rounds of the salting algorithm should be used -- the higher the number, the more computationally difficult it is to compare two passwords. 10-12 provides a nice balance between taking long enough so brute-force cracking is difficult, and being quick enough that your app is responsive to your users). 
+    bcrypt.genSalt(10, function(error, salt) {
+        if (error) {
+            return response.status(500).json({
+                message: 'Internal server error'
+            });
+        }
+        // generates a salted SHA-1 hash
+        bcrypt.hash(password, salt, function(error, hash) {
+            if (error) {
+                return response.status(500).json({
+                    message: 'Internal server error'
+                });
+            }
+            // creates new user from the constructor
+            var user = new User({
+                username: username,
+                password: hash
+            });
+            // saves new user to database
+            user.save(function(error) {
+               if (error) {
+                   return response.status(500).json({
+                       message: 'Internal server error'
+                   });
+               } 
+               response.status(201).header('Location', '/users/' + user._id).json({});
+            });
+        });
+    });
+}
 
 
 
