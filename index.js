@@ -16,28 +16,27 @@ var jsonParser = bodyParser.json();
 
 /*------------------------- AUTHENTICATION STRATEGY -------------------------*/
 
-// Uses HTTP Basic Authentication to provide a username and password to the API to authenticate the user and protect the endpoint
+// uses HTTP basic authentication for user credentials, protecting endpoint
 var strategy = new BasicStrategy(function(username, password, callback) {
-    // Looking up user in database and returns user document
+    // looks up user in database and returns user document
     User.findOne({
         username: username
     }, function (error, user) {
         if (error) {
             return callback(error);
         }
-        // Returns error message if username doesn't exist
+        // for non-existent usernames
         if (!user) {
             return callback(null, false, {
                 message: 'Incorrect username/password.'
             });
         }
-        
-        // Validates password for returned user
+        // validates password for returned user document
         user.validatePassword(password, function(error, isValid) {
             if (error) {
                 return callback(error);
             }
-            // Returns error message is supplied password is incorrect
+            // for incorrect passwords
             if (!isValid) {
                 return callback(null, false, {
                     message: 'Incorrect username/password.'
@@ -51,14 +50,11 @@ var strategy = new BasicStrategy(function(username, password, callback) {
         });
     });
 });
-
-// Calls authentication strategy
+// calls authentication strategy
 passport.use(strategy);
-
-// Tell Express app to integrate with passport
+// tells app to integrate with passport
 app.use(passport.initialize());
-
-// Use jsonParser middleware on ALL routes
+// use jsonParser middleware on ALL routes
 app.use(jsonParser);
 // Or use this as parameter for API requests
 // [jsonParser, passport.authenticate('basic', {session: false})]
@@ -82,32 +78,51 @@ app.get('/hidden', passport.authenticate('basic', {session: false}), function(re
 
 /*----- GET request for array of users -----*/
 app.get('/users', function(request, response) {
+    var userNames = [];
+
     User.find(function(error, users) {
         if (error) {
             //internal server error
             return response.sendStatus(500);
         }
+        for (var i = 0; i < users.length; i++) {
+            var emptyUser = {
+                _id: '',
+                username: ''
+            };
+            
+            emptyUser._id = users[i]._id;
+            emptyUser.username = users[i].username;
+            userNames.push(emptyUser);
+        }
         //if no error, response will return the users array in json
-        response.json(users);
+        response.json(userNames);
     });
 });
 
 
 /*----- GET request for specific user -----*/
-app.get('/users/:userID', function(request, response) {
-    User.find({
-        _id: request.params.userID
-    }, function(error, user) {
-        // check if user[0] in returned array is falsey 
-        if (!user[0]) {
-            // return 404 error message if specified user does not exist
-            return response.status(404).json({
-                message: "User not found"
-            });
-        }
-        // returns OK status and user that was queried in response
-        response.json(user[0]);
-    });
+app.get('/users/:userID', jsonParser, function(request, response) {
+        var emptyUser = {
+            _id: '',
+            username: ''
+        };        
+        
+        User.find({
+            _id: request.params.userID
+        }, function(error, user) {
+            // check if user[0] in returned array is falsey 
+            if (!user[0]) {
+                // return 404 error message if specified user does not exist
+                return response.status(404).json({
+                    message: "User not found"
+                });
+            }
+            emptyUser._id = user[0]._id;
+            emptyUser.username = user[0].username;
+            // returns OK status and user that was queried in response
+            response.json(emptyUser);
+        });
 });
 
 
