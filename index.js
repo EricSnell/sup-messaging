@@ -74,7 +74,7 @@ app.get('/hidden', passport.authenticate('basic', {session: false}), function(re
 
 /*----- GET request for array of users -----*/
 app.get('/users', passport.authenticate('basic', {session: false}), function(request, response) {
-    var userNames = [];
+    var returnUsersArr = [];
 
     User.find(function(error, users) {
         if (error) {
@@ -82,17 +82,15 @@ app.get('/users', passport.authenticate('basic', {session: false}), function(req
             return response.sendStatus(500);
         }
         for (var i = 0; i < users.length; i++) {
-            var emptyUser = {
-                _id: '',
-                username: ''
+            var returnUserObj = {
+                _id: users[i]._id,
+                username: users[i].username
             };
-            
-            emptyUser._id = users[i]._id;
-            emptyUser.username = users[i].username;
-            userNames.push(emptyUser);
+
+            returnUsersArr.push(returnUserObj);
         }
         //if no error, response will return the users array in json
-        response.json(userNames);
+        response.json(returnUsersArr);
     });
 });
 
@@ -263,19 +261,38 @@ app.delete('/users/:userID', passport.authenticate('basic', {session: false}), f
 // TODO: FIX THIS AUTHENTICATION AND CHECK RETURN
 /*----- GET request for messages array -----*/
 app.get('/messages', passport.authenticate('basic', {session: false}), function(request, response) {
-    // After authentication, checks that the user requesting user's id matches either the 'to' field or the 'from' field
-    if ((request.query.to !== request.user._id.toString()) && (request.query.from !== request.user._id.toString())) {
-        return response.status(401).json({
-             message: 'Unauthorized'
+        if ((request.body.to !== request.user._id.toString()) && (request.body.from !== request.user._id.toString())) {
+            return response.status(401).json({
+                message: 'Unauthorized'
+            });
+        } else {
+        // depending on specified fields in request.query, will return array of messages matching the fields from request. Request.query will contain the values in query string in an object. May include no values, or 'to', 'from', or both. These fields have only the userId, we use populate to access the information stored only in the user document.
+        Message.find(request.query).populate('from to').exec(function(error, messages) {
+            for (var i = 0; i < messages.length; i++) {
+                var returnMessagesArr = [];
+                var returnMessageObj = {
+                _id: messages[i].id,
+                    from: {
+                            _id: messages[i].from._id,
+                            username: messages[i].from.username
+                    },
+                    to: {
+                            _id: messages[i].to._id,
+                            username: messages[i].to.username
+                    },
+                    text: messages[i].text
+                }
+                
+                returnMessagesArr.push(returnMessageObj);
+                
+            }
+    
+            if (error) {
+                return response.sendStatus(500);
+            }
+            response.json(returnMessagesArr);
         });
     }
-    // depending on specified fields in request.query, will return array of messages matching the fields from request. Request.query will contain the values in query string in an object. May include no values, or 'to', 'from', or both. These fields have only the userId, we use populate to access the information stored only in the user document.
-    Message.find(request.query).populate('from to').exec(function(error, messages) {
-        if (error) {
-           return response.sendStatus(500);
-        }
-        response.json(messages);
-    });
 });
 
 
