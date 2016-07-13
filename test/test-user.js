@@ -14,6 +14,34 @@ var should = chai.should();
 
 chai.use(chaiHttp);
 
+// describe('Hidden endpoint', function() { 
+        // it('should grant access to authorized users')
+//     it('should reject unauthorized users', function() {
+//                 var user = {
+//                     username: 'joe'
+//                 };
+
+//                 // Create a user
+//                 return new User(user).save()
+//                     .then(function() {
+//                         // Get the list of users
+//                         return chai.request(app)
+//                                   .get(this.listPattern.stringify());
+//                     }.bind(this))
+//                     .then(function(res) {
+//                         // Check that the array contains a user
+//                         res.charset.should.equal('utf-8');
+//                         res.body.should.be.an('array');
+//                         res.body.length.should.equal(1);
+//                         res.body[0].should.be.an('object');
+//                         res.body[0].should.have.property('username');
+//                         res.body[0].username.should.be.a('string');
+//                         res.body[0].username.should.equal(user.username);
+//                     });    
+//                 });
+//         });
+// }
+
 describe('User endpoints', function() {
     beforeEach(function(done) {
         // Clear the database
@@ -24,19 +52,6 @@ describe('User endpoints', function() {
 
     describe('/users', function() {
         describe('GET', function() {
-            it('should return an empty list of users initially', function() {
-                // Get the list of users
-                return chai.request(app)
-                    .get(this.listPattern.stringify())
-                    .then(function(res) {
-                        // Check that it's an empty array
-                        res.should.have.status(200);
-                        res.type.should.equal('application/json');
-                        res.charset.should.equal('utf-8');
-                        res.body.should.be.an('array');
-                        res.body.length.should.equal(0);
-                    });
-            });
 
             it('should return a list of users', function() {
                 var user = {
@@ -63,9 +78,10 @@ describe('User endpoints', function() {
                         res.body[0].username.should.equal(user.username);
                         res.body[0].should.have.property('_id');
                         res.body[0]._id.should.be.a('string');
+                        // should not have property password
                     });
             });
-        });
+        
         describe('POST', function() {
             it('should allow adding a user', function() {
                 var user = {
@@ -98,6 +114,9 @@ describe('User endpoints', function() {
                         res.username.should.equal(user.username);
                     });
             });
+            
+            it('should reject requests without a body');
+            
             it('should reject users without a username', function() {
                 var user = {};
                 var spy = makeSpy();
@@ -148,11 +167,18 @@ describe('User endpoints', function() {
                         spy.called.should.be.false;
                     });
             });
+            
+            it('should reject empty-string usernames');
+            
+            it('should reject non-string passwords');
+            
+            it('should reject empty-string passwords');
         });
     });
 
     describe('/users/:userId', function() {
         describe('GET', function() {
+            
             it('should 404 on non-existent users', function() {
                 var spy = makeSpy();
                 // Request a non-existent user
@@ -169,6 +195,7 @@ describe('User endpoints', function() {
                         res.body.should.be.an('object');
                         res.body.should.have.property('message');
                         res.body.message.should.equal('User not found');
+                        // should not have property password
                     })
                     .then(function() {
                         // Check that the request didn't succeed
@@ -203,12 +230,14 @@ describe('User endpoints', function() {
                         res.body.should.have.property('_id');
                         res.body._id.should.be.a('string');
                         res.body._id.should.equal(userId)
+                        // should not have property password
                     });
             });
         });
 
         describe('PUT', function() {
-            it('should allow editing a user', function() {
+
+            it('should allow editing a username', function() {
                 var oldUser = {
                     username: 'joe'
                 };
@@ -246,6 +275,11 @@ describe('User endpoints', function() {
                         res.username.should.equal(newUser.username);
                     });
             });
+            
+            it('should allow editing a password');
+            
+            it('should allow editing a username and password');
+            
             it('should create a user if they don\'t exist', function() {
                 var user = {
                     _id: '000000000000000000000000',
@@ -277,6 +311,11 @@ describe('User endpoints', function() {
                         res.username.should.equal(user.username);
                     });
             });
+
+            it('should reject users attempting to edit a different user\'s information');
+            
+            it('should reject requests without a body');
+                        
             it('should reject users without a username', function() {
                 var user = {
                     _id: '000000000000000000000000'
@@ -334,6 +373,12 @@ describe('User endpoints', function() {
                         spy.called.should.be.false;
                     });
             });
+            
+            it('should reject empty-string usernames');
+            
+            it('should reject non-string passwords');
+            
+            it('should reject empty-string passwords');
         });
 
         describe('DELETE', function() {
@@ -389,6 +434,9 @@ describe('User endpoints', function() {
                         // Make sure that no user could be fetched
                         should.not.exist(res);
                     });
+            });
+            it('should not allow a user to delete another user');
+            
             });
         });
     });

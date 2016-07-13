@@ -258,7 +258,6 @@ app.delete('/users/:userID', passport.authenticate('basic', {session: false}), f
 
 /*--------------------------- MESSAGE ENDPOINTS ----------------------------*/
 
-// TODO: FIX THIS AUTHENTICATION AND CHECK RETURN
 /*----- GET request for messages array -----*/
 app.get('/messages', passport.authenticate('basic', {session: false}), function(request, response) {
         if ((request.body.to !== request.user._id.toString()) && (request.body.from !== request.user._id.toString())) {
@@ -284,9 +283,7 @@ app.get('/messages', passport.authenticate('basic', {session: false}), function(
                 }
                 
                 returnMessagesArr.push(returnMessageObj);
-                
             }
-    
             if (error) {
                 return response.sendStatus(500);
             }
@@ -294,6 +291,7 @@ app.get('/messages', passport.authenticate('basic', {session: false}), function(
         });
     }
 });
+
 
 
 /*----- GET request for a single message ------*/

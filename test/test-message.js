@@ -21,7 +21,7 @@ describe('Message endpoints', function() {
         this.listPattern = new UrlPattern('/messages');
         this.singlePattern = new UrlPattern('/messages/:messageId');
         // Clear the database
-        mongoose.connection.db.dropDatabase(function(err, res) {
+        mongoose.connection.db.dropDatabase(function(error, response) {
             // Add three example users
             this.alice = {
                 username: 'alice',
@@ -50,19 +50,6 @@ describe('Message endpoints', function() {
 
     describe('/messages', function() {
         describe('GET', function() {
-            it('should return an empty list of messages initially', function() {
-                // Get the list of messages
-                return chai.request(app)
-                    .get(this.listPattern.stringify())
-                    .then(function(res) {
-                        // Check that it's an empty array
-                        res.should.have.status(200);
-                        res.type.should.equal('application/json');
-                        res.charset.should.equal('utf-8');
-                        res.body.should.be.an('array');
-                        res.body.length.should.equal(0);
-                    });
-            });
 
             it('should return a list of messages', function() {
                 var messageA = {
@@ -341,6 +328,8 @@ describe('Message endpoints', function() {
                     message.to.username.should.equal(this.bob.username);
                 }.bind(this));
             });
+            
+            it('should reject requests from a user who is neither the sender nor recipient');
         });
         describe('POST', function() {
             it('should allow adding a message', function() {
@@ -546,6 +535,8 @@ describe('Message endpoints', function() {
                         spy.called.should.be.false;
                     });
             });
+
+            it('should reject requests from a user who is not the sender');
         });
     });
 
@@ -610,5 +601,7 @@ describe('Message endpoints', function() {
                     }.bind(this));
             });
         });
+
+        it('should reject requests from a user who is neither the sender nor recipient');
     });
 });
